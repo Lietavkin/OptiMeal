@@ -6,11 +6,39 @@ import { LogIn } from 'lucide-react'
 import Button from '../components/Button'
 import { preloadRouteByPath } from '../lib/routePreload'
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+}
+
+function formatSignupErrorMessage(message: string) {
+  const normalizedMessage = message.toLowerCase()
+
+  if (normalizedMessage.includes('user already registered')) {
+    return 'An account with this email already exists. Try signing in instead.'
+  }
+
+  if (normalizedMessage.includes('password should be at least')) {
+    return 'Password must be at least 8 characters long.'
+  }
+
+  if (normalizedMessage.includes('429') || normalizedMessage.includes('rate limit') || normalizedMessage.includes('too many requests')) {
+    return 'Too many signup attempts. Please wait a minute before trying again.'
+  }
+
+  if (normalizedMessage.includes('network') || normalizedMessage.includes('failed to fetch')) {
+    return 'Network issue detected. Check your connection and try again.'
+  }
+
+  return 'Unable to create your account right now. Please try again.'
+}
+
 function SignupPage() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -21,27 +49,60 @@ function SignupPage() {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
+    setMessage('')
     setLoading(true)
 
-    const { error: signUpError } = await signUpWithEmail(email, password)
-    setLoading(false)
+    const normalizedEmail = email.trim().toLowerCase()
 
-    if (signUpError) {
-      setError(signUpError.message)
+    if (!normalizedEmail) {
+      setError('Please enter your email address.')
+      setLoading(false)
       return
     }
 
-    navigate('/dashboard')
+    if (!isValidEmail(normalizedEmail)) {
+      setError('Please enter a valid email address.')
+      setLoading(false)
+      return
+    }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.')
+      setLoading(false)
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.')
+      setLoading(false)
+      return
+    }
+
+    const { data, error: signUpError } = await signUpWithEmail(normalizedEmail, password)
+    setLoading(false)
+
+    if (signUpError) {
+      setError(formatSignupErrorMessage(signUpError.message))
+      return
+    }
+
+    if (!data.session) {
+      setMessage('Account created. Please check your email to verify your account before signing in.')
+      return
+    }
+
+    navigate('/onboarding')
   }
 
   async function handleGoogleSignIn() {
     setError('')
+    setMessage('')
     setLoading(true)
     const { error: googleError } = await signInWithGoogle()
     setLoading(false)
 
     if (googleError) {
-      setError(googleError.message)
+      setError(formatSignupErrorMessage(googleError.message))
     }
   }
 
@@ -61,7 +122,7 @@ function SignupPage() {
         </div>
 
         <div className="space-y-4">
-          <Button onClick={handleGoogleSignIn} className="w-full justify-center gap-2 bg-slate-950 text-white hover:bg-slate-800">
+          <Button onClick={handleGoogleSignIn} disabled={loading} className="w-full justify-center gap-2 bg-slate-950 text-white hover:bg-slate-800">
             <LogIn className="h-5 w-5" />
             Continue with Google
           </Button>
@@ -71,7 +132,16 @@ function SignupPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</p> : null}
+          {error ? (
+            <p role="alert" aria-live="polite" className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-600">
+              {error}
+            </p>
+          ) : null}
+          {message ? (
+            <p aria-live="polite" className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {message}
+            </p>
+          ) : null}
 
           <label className="block text-sm font-semibold text-slate-700">
             Email
@@ -79,6 +149,7 @@ function SignupPage() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
               required
               className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
             />
@@ -90,6 +161,21 @@ function SignupPage() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              autoComplete="new-password"
+              minLength={8}
+              required
+              className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+            />
+          </label>
+
+          <label className="block text-sm font-semibold text-slate-700">
+            Confirm password
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              autoComplete="new-password"
+              minLength={8}
               required
               className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
             />

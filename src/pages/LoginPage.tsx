@@ -6,6 +6,28 @@ import { Link, useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
 import { preloadRouteByPath } from '../lib/routePreload'
 
+function formatLoginErrorMessage(message: string) {
+  const normalizedMessage = message.toLowerCase()
+
+  if (normalizedMessage.includes('invalid login credentials')) {
+    return 'Incorrect email or password. Please try again.'
+  }
+
+  if (normalizedMessage.includes('email not confirmed')) {
+    return 'Please confirm your email before signing in.'
+  }
+
+  if (normalizedMessage.includes('429') || normalizedMessage.includes('rate limit') || normalizedMessage.includes('too many requests')) {
+    return 'Too many sign-in attempts. Please wait a minute before trying again.'
+  }
+
+  if (normalizedMessage.includes('network') || normalizedMessage.includes('failed to fetch')) {
+    return 'Network issue detected. Check your connection and try again.'
+  }
+
+  return 'Unable to sign in right now. Please try again.'
+}
+
 function LoginPage() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -23,11 +45,19 @@ function LoginPage() {
     setError('')
     setLoading(true)
 
-    const { error: signInError } = await signInWithEmail(email, password)
+    const normalizedEmail = email.trim()
+
+    if (!normalizedEmail) {
+      setError('Please enter your email address.')
+      setLoading(false)
+      return
+    }
+
+    const { error: signInError } = await signInWithEmail(normalizedEmail, password)
     setLoading(false)
 
     if (signInError) {
-      setError(signInError.message)
+      setError(formatLoginErrorMessage(signInError.message))
       return
     }
 
@@ -61,7 +91,7 @@ function LoginPage() {
         </div>
 
         <div className="space-y-4">
-          <Button onClick={handleGoogleSignIn} className="w-full justify-center gap-2 bg-slate-950 text-white hover:bg-slate-800">
+          <Button onClick={handleGoogleSignIn} disabled={loading} className="w-full justify-center gap-2 bg-slate-950 text-white hover:bg-slate-800">
             <LogIn className="h-5 w-5" />
             Continue with Google
           </Button>
@@ -71,7 +101,11 @@ function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</p> : null}
+          {error ? (
+            <p role="alert" aria-live="polite" className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-600">
+              {error}
+            </p>
+          ) : null}
 
           <label className="block text-sm font-semibold text-slate-700">
             Email
