@@ -23,7 +23,13 @@ export async function signOut() {
 }
 
 export async function resetPassword(email: string) {
-  return supabase.auth.resetPasswordForEmail(email)
+  return supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  })
+}
+
+export async function updatePassword(password: string) {
+  return supabase.auth.updateUser({ password })
 }
 
 export async function getSession() {

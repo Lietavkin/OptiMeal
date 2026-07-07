@@ -2,6 +2,7 @@ type AppRoutePath =
   | '/login'
   | '/signup'
   | '/forgot-password'
+  | '/reset-password'
   | '/onboarding'
   | '/stores/data'
   | '/admin/products'
@@ -15,6 +16,7 @@ type AppRoutePath =
 export const loadLoginPage = () => import('../pages/LoginPage')
 export const loadSignupPage = () => import('../pages/SignupPage')
 export const loadForgotPasswordPage = () => import('../pages/ForgotPasswordPage')
+export const loadResetPasswordPage = () => import('../pages/ResetPasswordPage')
 export const loadOnboardingPage = () => import('../pages/OnboardingPage')
 export const loadStoreDataManagementPage = () => import('../pages/StoreDataManagementPage')
 export const loadAdminProductsPage = () => import('../pages/AdminProductsPage')
@@ -29,6 +31,7 @@ const routeLoaderByPath: Record<AppRoutePath, () => Promise<unknown>> = {
   '/login': loadLoginPage,
   '/signup': loadSignupPage,
   '/forgot-password': loadForgotPasswordPage,
+  '/reset-password': loadResetPasswordPage,
   '/onboarding': loadOnboardingPage,
   '/stores/data': loadStoreDataManagementPage,
   '/admin/products': loadAdminProductsPage,

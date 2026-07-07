@@ -8,6 +8,7 @@ import {
   loadAdminProductsPage,
   loadDashboardPage,
   loadForgotPasswordPage,
+  loadResetPasswordPage,
   loadAICoachPage,
   loadLoginPage,
   loadNotFoundPage,
@@ -24,6 +25,7 @@ const StoreDataManagementPage = lazy(loadStoreDataManagementPage)
 const DashboardPage = lazy(loadDashboardPage)
 const AICoachPage = lazy(loadAICoachPage)
 const ForgotPasswordPage = lazy(loadForgotPasswordPage)
+const ResetPasswordPage = lazy(loadResetPasswordPage)
 const LoginPage = lazy(loadLoginPage)
 const SignupPage = lazy(loadSignupPage)
 const ProfilePage = lazy(loadProfilePage)
@@ -43,6 +45,7 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
 
               <Route element={<RouteGuard />}>
                 <Route path="/onboarding" element={<OnboardingPage />} />
