@@ -1,4 +1,5 @@
 type AppRoutePath =
+  | '/'
   | '/login'
   | '/signup'
   | '/forgot-password'
@@ -13,6 +14,7 @@ type AppRoutePath =
   | '/recipes'
   | '/not-found'
 
+export const loadHomePage = () => import('../pages/HomePage')
 export const loadLoginPage = () => import('../pages/LoginPage')
 export const loadSignupPage = () => import('../pages/SignupPage')
 export const loadForgotPasswordPage = () => import('../pages/ForgotPasswordPage')
@@ -28,6 +30,7 @@ export const loadRecipesPage = () => import('../pages/RecipesPage')
 export const loadNotFoundPage = () => import('../pages/NotFoundPage')
 
 const routeLoaderByPath: Record<AppRoutePath, () => Promise<unknown>> = {
+  '/': loadHomePage,
   '/login': loadLoginPage,
   '/signup': loadSignupPage,
   '/forgot-password': loadForgotPasswordPage,
@@ -47,7 +50,7 @@ const preloadedRoutes = new Set<AppRoutePath>()
 
 function toRoutePath(pathname: string): AppRoutePath | null {
   const normalized = pathname.startsWith('/') ? pathname : `/${pathname}`
-  if (normalized === '/') return '/dashboard'
+  if (normalized === '/') return '/'
   if (normalized in routeLoaderByPath) return normalized as AppRoutePath
   return null
 }

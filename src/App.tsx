@@ -1,10 +1,11 @@
 import { Suspense, lazy } from 'react'
-import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { ProfileProvider } from './contexts/ProfileContext'
 import RouteGuard from './components/RouteGuard'
 import RouteLoadingScreen from './components/RouteLoadingScreen'
 import {
+  loadHomePage,
   loadAdminProductsPage,
   loadDashboardPage,
   loadForgotPasswordPage,
@@ -20,6 +21,7 @@ import {
   loadStoreDataManagementPage,
 } from './lib/routePreload'
 
+const HomePage = lazy(loadHomePage)
 const AdminProductsPage = lazy(loadAdminProductsPage)
 const StoreDataManagementPage = lazy(loadStoreDataManagementPage)
 const DashboardPage = lazy(loadDashboardPage)
@@ -41,7 +43,7 @@ function App() {
         <ProfileProvider>
           <Suspense fallback={<RouteLoadingScreen />}>
             <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
