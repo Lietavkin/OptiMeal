@@ -2,6 +2,17 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase } from './supabaseClient'
 import type { Profile } from '../types'
 
+function sanitizeGoalValue(value: number | undefined, label: string, min: number, max: number) {
+  if (value === undefined) return undefined
+  if (!Number.isFinite(value)) {
+    throw new Error(`${label} must be a valid number.`)
+  }
+  if (value < min || value > max) {
+    throw new Error(`${label} must be between ${min} and ${max}.`)
+  }
+  return Math.round(value)
+}
+
 export async function getProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
   if (error && error.code !== 'PGRST116') throw error
@@ -29,6 +40,11 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 export async function upsertProfile(profile: Profile): Promise<Profile> {
   const { daily_calories_goal, daily_protein_goal, daily_carbs_goal, daily_fat_goal, ...profileFields } = profile
 
+  const sanitizedCalories = sanitizeGoalValue(daily_calories_goal, 'Daily calories goal', 1200, 5000)
+  const sanitizedProtein = sanitizeGoalValue(daily_protein_goal, 'Daily protein goal', 40, 350)
+  const sanitizedCarbs = sanitizeGoalValue(daily_carbs_goal, 'Daily carbs goal', 50, 700)
+  const sanitizedFat = sanitizeGoalValue(daily_fat_goal, 'Daily fat goal', 20, 250)
+
   const { data: profileData, error: profileError } = await supabase
     .from('profiles')
     .upsert(profileFields)
@@ -36,14 +52,14 @@ export async function upsertProfile(profile: Profile): Promise<Profile> {
     .single()
   if (profileError) throw profileError
 
-  if (daily_calories_goal !== undefined || daily_protein_goal !== undefined || daily_carbs_goal !== undefined || daily_fat_goal !== undefined) {
+  if (sanitizedCalories !== undefined || sanitizedProtein !== undefined || sanitizedCarbs !== undefined || sanitizedFat !== undefined) {
     const goalPayload = {
       id: uuidv4(),
       user_id: profile.id,
-      calories: daily_calories_goal ?? 2000,
-      protein: daily_protein_goal ?? 100,
-      carbs: daily_carbs_goal ?? 250,
-      fat: daily_fat_goal ?? 70,
+      calories: sanitizedCalories ?? 2000,
+      protein: sanitizedProtein ?? 100,
+      carbs: sanitizedCarbs ?? 250,
+      fat: sanitizedFat ?? 70,
       active: true,
     }
     const { data: goalData, error: goalError } = await supabase
