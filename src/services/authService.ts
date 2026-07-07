@@ -28,6 +28,51 @@ export async function resetPassword(email: string) {
   })
 }
 
+export async function initializeRecoverySessionFromUrl() {
+  const url = new URL(window.location.href)
+  const queryParams = url.searchParams
+  const hashParams = new URLSearchParams(window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '')
+
+  const code = queryParams.get('code')
+  if (code) {
+    const result = await supabase.auth.exchangeCodeForSession(code)
+    if (!result.error) {
+      window.history.replaceState({}, document.title, '/reset-password')
+    }
+    return result
+  }
+
+  const tokenHash = queryParams.get('token_hash')
+  const otpType = queryParams.get('type')
+  if (tokenHash && otpType === 'recovery') {
+    const result = await supabase.auth.verifyOtp({
+      type: 'recovery',
+      token_hash: tokenHash,
+    })
+
+    if (!result.error) {
+      window.history.replaceState({}, document.title, '/reset-password')
+    }
+    return result
+  }
+
+  const accessToken = hashParams.get('access_token')
+  const refreshToken = hashParams.get('refresh_token')
+  if (accessToken && refreshToken) {
+    const result = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    })
+
+    if (!result.error) {
+      window.history.replaceState({}, document.title, '/reset-password')
+    }
+    return result
+  }
+
+  return supabase.auth.getSession()
+}
+
 export async function updatePassword(password: string) {
   return supabase.auth.updateUser({ password })
 }

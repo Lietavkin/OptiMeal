@@ -2,12 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
-import { getSession, updatePassword } from '../services/authService'
-
-function isValidRecoverySession() {
-  const hash = window.location.hash.toLowerCase()
-  return hash.includes('type=recovery') || hash.includes('access_token=')
-}
+import { getSession, initializeRecoverySessionFromUrl, updatePassword } from '../services/authService'
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
@@ -23,12 +18,20 @@ export default function ResetPasswordPage() {
     let mounted = true
 
     async function checkRecoverySession() {
+      const recoveryResult = await initializeRecoverySessionFromUrl()
+      if (!mounted) return
+
+      if (recoveryResult.error) {
+        setCanReset(false)
+        setCheckingSession(false)
+        return
+      }
+
       const { data } = await getSession()
       if (!mounted) return
 
       const hasSession = Boolean(data.session)
-      const hasRecoveryHash = isValidRecoverySession()
-      setCanReset(hasSession || hasRecoveryHash)
+      setCanReset(hasSession)
       setCheckingSession(false)
     }
 
