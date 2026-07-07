@@ -46,6 +46,57 @@ export type Profile = {
   daily_protein_goal?: number
   daily_carbs_goal?: number
   daily_fat_goal?: number
+  onboarding_data?: OnboardingData | null
+  onboarding_completed_at?: string | null
+  onboarding_ai_summary?: string | null
+  onboarding_weekly_strategy?: string | null
+}
+
+export type OnboardingPrimaryGoal =
+  | 'fat_loss'
+  | 'maintenance'
+  | 'muscle_gain'
+  | 'performance'
+  | 'general_health'
+
+export type OnboardingSex = 'female' | 'male' | 'non_binary' | 'prefer_not_to_say'
+
+export type OnboardingActivityLevel = 'sedentary' | 'light' | 'moderate' | 'very_active' | 'athlete'
+
+export type OnboardingCookingSkill = 'beginner' | 'intermediate' | 'advanced' | 'expert'
+
+export type OnboardingDietaryStyle = DietaryStyle | 'flexitarian'
+
+export type OnboardingPantryHabits = 'fresh_often' | 'weekly_prep' | 'bulk_storage' | 'mixed'
+
+export type OnboardingData = {
+  age: number
+  sex: OnboardingSex
+  heightCm: number
+  weightKg: number
+  targetWeightKg: number
+  activityLevel: OnboardingActivityLevel
+  sport: string | null
+  athleteType: string | null
+  dailySchedule: string
+  cookingSkill: OnboardingCookingSkill
+  cookingTimeMinutes: number
+  groceryBudgetWeekly: number
+  favoriteCuisines: string[]
+  dislikedFoods: string[]
+  allergies: string[]
+  dietaryStyle: OnboardingDietaryStyle
+  preferredGroceryStores: string[]
+  preferredRestaurants: string[]
+  pantryHabits: OnboardingPantryHabits
+  mealFrequency: number
+  macroGoal: {
+    calories: number
+    protein: number
+    carbs: number
+    fat: number
+  }
+  primaryGoal: OnboardingPrimaryGoal
 }
 
 export type NutritionSummary = {
@@ -190,7 +241,50 @@ export type OptimizationRequest = {
   limit?: number
 }
 
-export type StoreKey = 'lidl' | 'kaufland' | 'tesco' | 'carrefour' | 'aldi'
+export type OptimizationObjectiveKey =
+  | 'minimize_cost'
+  | 'maximize_nutrition'
+  | 'maximize_protein'
+  | 'minimize_food_waste'
+  | 'minimize_cooking_time'
+  | 'minimize_store_travel'
+  | 'balanced'
+
+export type OptimizationMacroTargets = {
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+}
+
+export type OptimizationConstraintSet = {
+  macroTargets?: OptimizationMacroTargets
+  micronutrientMinimums?: Record<string, number>
+  budget?: number
+  pantryItems?: PantryItem[]
+  restaurantMeals?: RestaurantMeal[]
+  allergies?: string[]
+  dietaryRestrictions?: string[]
+  mealFrequency?: {
+    min: number
+    max: number
+  }
+  maxCookingMinutesPerRecipe?: number
+  maxTotalCookingMinutes?: number
+  preferredStores?: StoreKey[]
+  maxShoppingTrips?: number
+}
+
+export type ObjectiveWeightMap = Record<OptimizationObjectiveKey, number>
+
+export type GroceryPlanComparison = {
+  costDifference: number
+  nutritionDifference: number
+  proteinDifference: number
+  wasteDifference: number
+}
+
+export type StoreKey = 'lidl' | 'kaufland' | 'tesco' | 'billa' | 'carrefour' | 'aldi'
 
 export type GroceryStore = {
   key: StoreKey
@@ -218,6 +312,8 @@ export type StoreInventoryItem = {
   currency: string
   availability: boolean
   lastUpdated: string
+  externalProductId?: string | null
+  sourceHash?: string | null
 }
 
 export type StoreInventoryQuery = {
@@ -229,6 +325,154 @@ export type StoreInventoryQuery = {
 
 export type StoreInventoryProvider = {
   getInventory: (query?: StoreInventoryQuery) => Promise<StoreInventoryItem[]>
+}
+
+export type ExternalProviderProduct = {
+  externalProductId: string
+  storeKey: StoreKey
+  name: string
+  brand: string
+  category: string
+  packageSize: number
+  packageUnit: string
+  nutrition: StoreInventoryNutrition
+  price: number
+  currency: string
+  availability: boolean
+  updatedAt: string
+}
+
+export type NormalizedProviderProduct = {
+  storeKey: StoreKey
+  externalProductId: string
+  name: string
+  brand: string
+  category: string
+  packageSize: number
+  packageUnit: string
+  nutrition: StoreInventoryNutrition
+  estimatedPrice: number
+  currency: string
+  availability: boolean
+  updatedAt: string
+  sourceHash: string
+}
+
+export type GroceryProviderFetchResult = {
+  products: ExternalProviderProduct[]
+  nextCursor: string | null
+}
+
+export type GroceryProvider = {
+  key: StoreKey
+  displayName: string
+  fetchProducts: (cursor?: string | null) => Promise<GroceryProviderFetchResult>
+}
+
+export type SyncRunStatus = 'idle' | 'success' | 'error' | 'running'
+
+export type ProviderSyncState = {
+  providerKey: StoreKey
+  status: SyncRunStatus
+  lastSyncedAt: string | null
+  cursor: string | null
+  productsInserted: number
+  productsUpdated: number
+  productsUnchanged: number
+  errorMessage: string | null
+  updatedAt: string
+}
+
+export type ProviderSyncHistoryItem = {
+  id: string
+  providerKey: StoreKey
+  status: SyncRunStatus
+  startedAt: string
+  finishedAt: string | null
+  productsInserted: number
+  productsUpdated: number
+  productsUnchanged: number
+  errorMessage: string | null
+}
+
+export type ProviderSyncResult = {
+  providerKey: StoreKey
+  status: SyncRunStatus
+  inserted: number
+  updated: number
+  unchanged: number
+  cursor: string | null
+  errorMessage: string | null
+}
+
+export type StoreInventoryAdminFilters = {
+  search?: string
+  storeKey?: StoreKey | 'all'
+  category?: string | 'all'
+  onlyAvailable?: boolean
+}
+
+export type StoreInventoryUpsertInput = {
+  id?: string
+  storeKey: StoreKey
+  ingredientId?: string | null
+  name: string
+  brand: string
+  category: string
+  packageSize: number
+  packageUnit: string
+  nutrition: StoreInventoryNutrition
+  estimatedPrice: number
+  currency: string
+  availability: boolean
+}
+
+export type IngredientMatchResult = {
+  ingredientId: string | null
+  canonicalName: string | null
+  confidence: number
+  strategy: 'exact' | 'alias' | 'fuzzy' | 'manual_override' | 'none'
+}
+
+export type ImportFormat = 'csv' | 'json'
+
+export type ProductImportCandidate = StoreInventoryUpsertInput & {
+  rowNumber: number
+  rawSource: Record<string, unknown>
+}
+
+export type ProductImportIssue = {
+  rowNumber: number
+  field: string
+  message: string
+  severity: 'error' | 'warning'
+}
+
+export type ProductDuplicateInfo = {
+  rowNumber: number
+  duplicateOfRow?: number
+  existingProductId?: string
+  key: string
+}
+
+export type ProductImportPreviewRow = ProductImportCandidate & {
+  duplicate: ProductDuplicateInfo | null
+  validationIssues: ProductImportIssue[]
+  ingredientMatch: IngredientMatchResult
+}
+
+export type ProductImportPreview = {
+  format: ImportFormat
+  rows: ProductImportPreviewRow[]
+  issues: ProductImportIssue[]
+  duplicateCount: number
+  validCount: number
+}
+
+export type ProductImportCommitSummary = {
+  inserted: number
+  updated: number
+  skipped: number
 }
 
 export type WeeklyMealPlanEntry = {
@@ -289,6 +533,9 @@ export type GroceryOptimizationRequest = {
   inventoryProvider: StoreInventoryProvider
   allowedStoreKeys?: StoreKey[]
   pantry?: PantryItem[]
+  constraints?: OptimizationConstraintSet
+  objective?: OptimizationObjectiveKey
+  objectiveWeights?: Partial<ObjectiveWeightMap>
 }
 
 export type GroceryOptimizationSummary = {
@@ -309,6 +556,8 @@ export type GroceryOptimizationResult = {
   baselineCost: number
   summary: GroceryOptimizationSummary
   printableShoppingList: string
+  optimizationExplanation?: string
+  planComparison?: GroceryPlanComparison
 }
 
 export type DietaryStyle =
@@ -544,4 +793,97 @@ export type WeeklyRealWorldMetrics = {
     groceryReduction: number
     shoppingReductionPercent: number
   }
+}
+
+export type AICoachAdviceType =
+  | 'daily'
+  | 'weekly'
+  | 'budget'
+  | 'shopping'
+  | 'restaurant'
+  | 'recovery'
+
+export type AICoachRecommendationStatus = 'pending' | 'accepted' | 'ignored' | 'replaced'
+
+export type AICoachAction = 'accept' | 'ignore' | 'replace_meal' | 'regenerate'
+
+export type AthleteDayType = 'training' | 'recovery' | 'rest' | 'match'
+
+export type AICoachDailyCheckin = {
+  id: string
+  userId: string
+  entryDate: string
+  athleteDayType: AthleteDayType
+  hunger: number
+  energy: number
+  sleep: number
+  mood: number
+  recovery: number
+  stress: number | null
+  waterMl: number
+  weightKg: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type AICoachDailyCheckinInput = {
+  entryDate: string
+  athleteDayType: AthleteDayType
+  hunger: number
+  energy: number
+  sleep: number
+  mood: number
+  recovery: number
+  stress?: number | null
+  waterMl: number
+  weightKg: number | null
+}
+
+export type AICoachRecommendation = {
+  id: string
+  userId: string
+  entryDate: string
+  adviceType: AICoachAdviceType
+  title: string
+  message: string
+  why: string
+  expectedBenefit: string
+  confidence: number
+  status: AICoachRecommendationStatus
+  linkedMealName: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type AICoachRecommendationInput = {
+  entryDate: string
+  adviceType: AICoachAdviceType
+  title: string
+  message: string
+  why: string
+  expectedBenefit: string
+  confidence: number
+  linkedMealName?: string | null
+}
+
+export type AICoachLearningSnapshot = {
+  acceptanceRate: number
+  ignoredRate: number
+  byType: Record<AICoachAdviceType, { accepted: number; ignored: number }>
+}
+
+export type AICoachDashboard = {
+  todayNutritionScore: number
+  remaining: {
+    calories: number
+    protein: number
+    carbs: number
+    fat: number
+  }
+  mealsCompleted: number
+  waterIntakeMl: number
+  weightTrendKg: number
+  adherenceScore: number
+  checkin: AICoachDailyCheckin
+  recommendations: AICoachRecommendation[]
 }

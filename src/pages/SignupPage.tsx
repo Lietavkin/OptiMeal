@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { signUpWithEmail, signInWithGoogle } from '../services/authService'
 import { Link, useNavigate } from 'react-router-dom'
 import { LogIn } from 'lucide-react'
 import Button from '../components/Button'
+import { preloadRouteByPath } from '../lib/routePreload'
 
 function SignupPage() {
   const navigate = useNavigate()
@@ -11,6 +12,11 @@ function SignupPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    preloadRouteByPath('/onboarding')
+    preloadRouteByPath('/dashboard')
+  }, [])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()

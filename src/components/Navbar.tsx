@@ -1,10 +1,14 @@
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { classNames } from '../utils/classNames'
+import { preloadRouteByPath } from '../lib/routePreload'
 
 function NavItem({ to, children }: { to: string; children: string }) {
 	return (
 		<NavLink
 			to={to}
+			onMouseEnter={() => preloadRouteByPath(to)}
+			onFocus={() => preloadRouteByPath(to)}
+			onTouchStart={() => preloadRouteByPath(to)}
 			className={({ isActive }) =>
 				classNames(
 					'rounded-full px-4 py-2 text-sm font-medium transition',
@@ -19,7 +23,7 @@ function NavItem({ to, children }: { to: string; children: string }) {
 
 export default function Navbar() {
 	const location = useLocation()
-	const isDashboardArea = location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/settings') || location.pathname.startsWith('/recipes')
+	const isDashboardArea = location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/coach') || location.pathname.startsWith('/stores/data') || location.pathname.startsWith('/admin/products') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/settings') || location.pathname.startsWith('/recipes') || location.pathname.startsWith('/onboarding')
 
 	return (
 		<header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur">
@@ -31,6 +35,9 @@ export default function Navbar() {
 				{isDashboardArea ? (
 					<nav className="order-3 flex w-full items-center gap-2 overflow-x-auto pb-1 sm:order-none sm:w-auto sm:pb-0">
 						<NavItem to="/dashboard">Dashboard</NavItem>
+						<NavItem to="/coach">AI Coach</NavItem>
+						<NavItem to="/stores/data">Store Data</NavItem>
+						<NavItem to="/admin/products">Products</NavItem>
 						<NavItem to="/profile">Profile</NavItem>
 						<NavItem to="/recipes">Recipes</NavItem>
 						<NavItem to="/settings">Settings</NavItem>
@@ -52,10 +59,22 @@ export default function Navbar() {
 				<div className="flex items-center gap-2">
 					{!isDashboardArea ? (
 						<>
-							<Link to="/login" className="rounded-full px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
+							<Link
+								to="/login"
+								onMouseEnter={() => preloadRouteByPath('/login')}
+								onFocus={() => preloadRouteByPath('/login')}
+								onTouchStart={() => preloadRouteByPath('/login')}
+								className="rounded-full px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+							>
 								Sign in
 							</Link>
-							<Link to="/signup" className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700">
+							<Link
+								to="/signup"
+								onMouseEnter={() => preloadRouteByPath('/signup')}
+								onFocus={() => preloadRouteByPath('/signup')}
+								onTouchStart={() => preloadRouteByPath('/signup')}
+								className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+							>
 								Get started
 							</Link>
 						</>

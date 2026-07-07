@@ -2,16 +2,22 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase } from './supabaseClient'
 import type {
   GroceryStore,
+  NormalizedProviderProduct,
+  StoreInventoryAdminFilters,
   StoreInventoryItem,
   StoreInventoryProvider,
   StoreInventoryQuery,
+  StoreInventoryUpsertInput,
   StoreKey,
 } from '../types'
+import { matchProductToIngredient } from './ingredientMatchingService'
+import { getIngredientCatalogForUser } from './ingredientsService'
 
 const supportedStores: GroceryStore[] = [
   { key: 'lidl', name: 'Lidl' },
   { key: 'kaufland', name: 'Kaufland' },
   { key: 'tesco', name: 'Tesco' },
+  { key: 'billa', name: 'Billa' },
   { key: 'carrefour', name: 'Carrefour' },
   { key: 'aldi', name: 'Aldi' },
 ]
@@ -33,10 +39,28 @@ type StoreInventoryRow = {
   availability: boolean
   last_updated: string
   ingredient_id: string | null
+  external_product_id: string | null
+  source_hash: string | null
 }
 
 function normalizeProductName(name: string) {
   return name.trim().toLowerCase()
+}
+
+function toInventoryKey(input: {
+  storeKey: StoreKey
+  name: string
+  brand: string
+  packageSize: number
+  packageUnit: string
+}) {
+  return [
+    input.storeKey,
+    normalizeProductName(input.name),
+    normalizeProductName(input.brand),
+    Number(input.packageSize).toFixed(2),
+    normalizeProductName(input.packageUnit),
+  ].join('|')
 }
 
 function mapStoreInventoryRow(row: StoreInventoryRow): StoreInventoryItem {
@@ -63,6 +87,8 @@ function mapStoreInventoryRow(row: StoreInventoryRow): StoreInventoryItem {
     availability: Boolean(row.availability),
     lastUpdated: row.last_updated,
     ingredientId: row.ingredient_id,
+    externalProductId: row.external_product_id,
+    sourceHash: row.source_hash,
   }
 }
 
@@ -337,12 +363,72 @@ const placeholderInventoryByStore: Record<StoreKey, Array<Omit<StoreInventoryIte
       ingredientId: null,
     },
   ],
+  billa: [
+    {
+      store: { key: 'billa', name: 'Billa' },
+      name: 'Turkey Breast Slices',
+      brand: 'Billa Premium',
+      category: 'Meat & Fish',
+      packageSize: 300,
+      packageUnit: 'g',
+      nutrition: { calories: 360, protein: 66, carbs: 2, fat: 9 },
+      estimatedPrice: 4.79,
+      currency: 'USD',
+      availability: true,
+      ingredientId: null,
+    },
+    {
+      store: { key: 'billa', name: 'Billa' },
+      name: 'Jasmine Rice',
+      brand: 'Clever',
+      category: 'Pantry',
+      packageSize: 1,
+      packageUnit: 'kg',
+      nutrition: { calories: 3600, protein: 67, carbs: 790, fat: 9 },
+      estimatedPrice: 2.99,
+      currency: 'USD',
+      availability: true,
+      ingredientId: null,
+    },
+    {
+      store: { key: 'billa', name: 'Billa' },
+      name: 'Low Fat Skyr',
+      brand: 'Billa',
+      category: 'Dairy',
+      packageSize: 400,
+      packageUnit: 'g',
+      nutrition: { calories: 260, protein: 44, carbs: 18, fat: 1 },
+      estimatedPrice: 2.49,
+      currency: 'USD',
+      availability: true,
+      ingredientId: null,
+    },
+    {
+      store: { key: 'billa', name: 'Billa' },
+      name: 'Mixed Bell Peppers',
+      brand: 'Fresh Billa',
+      category: 'Produce',
+      packageSize: 500,
+      packageUnit: 'g',
+      nutrition: { calories: 155, protein: 5, carbs: 30, fat: 2 },
+      estimatedPrice: 3.39,
+      currency: 'USD',
+      availability: true,
+      ingredientId: null,
+    },
+  ],
 }
 
 function ingredientNameMatch(productName: string, requestedName: string) {
   const product = normalizeProductName(productName)
   const requested = normalizeProductName(requestedName)
-  return product.includes(requested) || requested.includes(product)
+  if (product.includes(requested) || requested.includes(product)) return true
+
+  const productTokens = product.split(' ').filter(Boolean)
+  const requestedTokens = requested.split(' ').filter(Boolean)
+  const overlap = requestedTokens.filter((token) => productTokens.includes(token)).length
+
+  return overlap >= Math.max(1, Math.floor(requestedTokens.length * 0.5))
 }
 
 export async function getGroceryStores(): Promise<GroceryStore[]> {
@@ -360,6 +446,8 @@ export async function getGroceryStores(): Promise<GroceryStore[]> {
 }
 
 export async function seedPlaceholderStoreInventory(): Promise<void> {
+  if (import.meta.env.PROD) return
+
   const { count, error: countError } = await supabase
     .from('store_inventory')
     .select('id', { count: 'exact', head: true })
@@ -386,6 +474,8 @@ export async function seedPlaceholderStoreInventory(): Promise<void> {
       currency: item.currency,
       availability: item.availability,
       last_updated: new Date().toISOString(),
+      external_product_id: null,
+      source_hash: null,
     }))
 
   const { error } = await supabase.from('store_inventory').insert(rows)
@@ -417,8 +507,310 @@ export async function getStoreInventory(query: StoreInventoryQuery = {}): Promis
   }
 
   return inventory.filter((item) =>
-    query.ingredientNames?.some((name) => ingredientNameMatch(item.name, name)),
+    query.ingredientNames?.some((name) => ingredientNameMatch(`${item.brand} ${item.name}`, name)),
   )
+}
+
+export async function getStoreInventoryForAdmin(filters: StoreInventoryAdminFilters = {}): Promise<StoreInventoryItem[]> {
+  let query = supabase
+    .from('store_inventory')
+    .select('*')
+    .order('last_updated', { ascending: false })
+
+  if (filters.onlyAvailable !== false) {
+    query = query.eq('availability', true)
+  }
+
+  if (filters.storeKey && filters.storeKey !== 'all') {
+    query = query.eq('store_key', filters.storeKey)
+  }
+
+  if (filters.category && filters.category !== 'all') {
+    query = query.eq('category', filters.category)
+  }
+
+  if (filters.search?.trim()) {
+    const term = filters.search.trim()
+    query = query.or(`name.ilike.%${term}%,brand.ilike.%${term}%`)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+
+  return (data ?? []).map((row) => mapStoreInventoryRow(row as StoreInventoryRow))
+}
+
+export async function getStoreInventoryCategories(): Promise<string[]> {
+  const { data, error } = await supabase.from('store_inventory').select('category')
+  if (error) throw error
+
+  return Array.from(new Set((data ?? []).map((row) => String(row.category).trim()).filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b),
+  )
+}
+
+export async function createStoreInventoryItemForUser(userId: string, input: StoreInventoryUpsertInput): Promise<StoreInventoryItem> {
+  const ingredients = await getIngredientCatalogForUser(userId)
+  const matched = matchProductToIngredient({
+    product: input,
+    ingredients,
+    manualIngredientId: input.ingredientId ?? null,
+  })
+
+  const payload = {
+    id: uuidv4(),
+    store_key: input.storeKey,
+    ingredient_id: input.ingredientId ?? matched.ingredientId,
+    name: input.name.trim(),
+    brand: input.brand.trim(),
+    category: input.category.trim(),
+    package_size: input.packageSize,
+    package_unit: input.packageUnit.trim(),
+    calories: input.nutrition.calories,
+    protein: input.nutrition.protein,
+    carbs: input.nutrition.carbs,
+    fat: input.nutrition.fat,
+    estimated_price: input.estimatedPrice,
+    currency: input.currency,
+    availability: input.availability,
+    last_updated: new Date().toISOString(),
+    external_product_id: null,
+    source_hash: null,
+  }
+
+  const { data, error } = await supabase.from('store_inventory').insert(payload).select('*').single()
+  if (error) throw error
+
+  return mapStoreInventoryRow(data as StoreInventoryRow)
+}
+
+export async function updateStoreInventoryItem(itemId: string, input: StoreInventoryUpsertInput): Promise<StoreInventoryItem> {
+  const payload = {
+    store_key: input.storeKey,
+    ingredient_id: input.ingredientId ?? null,
+    name: input.name.trim(),
+    brand: input.brand.trim(),
+    category: input.category.trim(),
+    package_size: input.packageSize,
+    package_unit: input.packageUnit.trim(),
+    calories: input.nutrition.calories,
+    protein: input.nutrition.protein,
+    carbs: input.nutrition.carbs,
+    fat: input.nutrition.fat,
+    estimated_price: input.estimatedPrice,
+    currency: input.currency,
+    availability: input.availability,
+    last_updated: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    source_hash: null,
+  }
+
+  const { data, error } = await supabase
+    .from('store_inventory')
+    .update(payload)
+    .eq('id', itemId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return mapStoreInventoryRow(data as StoreInventoryRow)
+}
+
+export async function deleteStoreInventoryItem(itemId: string): Promise<void> {
+  const { error } = await supabase.from('store_inventory').delete().eq('id', itemId)
+  if (error) throw error
+}
+
+export async function bulkUpdateStoreInventoryPrices(args: {
+  itemIds: string[]
+  mode: 'set' | 'increase_percent' | 'decrease_percent'
+  value: number
+}): Promise<number> {
+  if (args.itemIds.length === 0) return 0
+
+  const { data, error } = await supabase
+    .from('store_inventory')
+    .select('id, estimated_price')
+    .in('id', args.itemIds)
+
+  if (error) throw error
+
+  const rows = data ?? []
+  const now = new Date().toISOString()
+
+  const updates = rows.map((row) => {
+    const current = Number(row.estimated_price ?? 0)
+    const next =
+      args.mode === 'set'
+        ? args.value
+        : args.mode === 'increase_percent'
+          ? current * (1 + args.value / 100)
+          : current * Math.max(0, 1 - args.value / 100)
+
+    return {
+      id: row.id,
+      estimated_price: Number(next.toFixed(2)),
+      last_updated: now,
+      updated_at: now,
+    }
+  })
+
+  const { error: updateError } = await supabase
+    .from('store_inventory')
+    .upsert(updates, { onConflict: 'id' })
+
+  if (updateError) throw updateError
+  return updates.length
+}
+
+export async function findExistingInventoryByKeys(items: StoreInventoryUpsertInput[]): Promise<Map<string, StoreInventoryItem>> {
+  if (items.length === 0) return new Map()
+
+  const stores = Array.from(new Set(items.map((item) => item.storeKey)))
+  const { data, error } = await supabase
+    .from('store_inventory')
+    .select('*')
+    .in('store_key', stores)
+
+  if (error) throw error
+
+  const mapped = (data ?? []).map((row) => mapStoreInventoryRow(row as StoreInventoryRow))
+  const byKey = new Map<string, StoreInventoryItem>()
+  mapped.forEach((item) => {
+    byKey.set(
+      toInventoryKey({
+        storeKey: item.store.key,
+        name: item.name,
+        brand: item.brand,
+        packageSize: item.packageSize,
+        packageUnit: item.packageUnit,
+      }),
+      item,
+    )
+  })
+
+  return byKey
+}
+
+export function createInventoryKey(input: {
+  storeKey: StoreKey
+  name: string
+  brand: string
+  packageSize: number
+  packageUnit: string
+}) {
+  return toInventoryKey(input)
+}
+
+export async function upsertNormalizedProviderProducts(args: {
+  products: NormalizedProviderProduct[]
+  ingredientIdByExternalId: Record<string, string | null>
+}): Promise<{ inserted: number; updated: number; unchanged: number }> {
+  if (args.products.length === 0) {
+    return { inserted: 0, updated: 0, unchanged: 0 }
+  }
+
+  const storeKeys = Array.from(new Set(args.products.map((item) => item.storeKey)))
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from('store_inventory')
+    .select('*')
+    .in('store_key', storeKeys)
+
+  if (existingError) throw existingError
+
+  const existingByExternal = new Map<string, StoreInventoryRow>()
+  const existingByFallback = new Map<string, StoreInventoryRow>()
+
+  ;(existingRows ?? []).forEach((row) => {
+    const mapped = row as StoreInventoryRow
+    if (mapped.external_product_id) {
+      existingByExternal.set(`${mapped.store_key}:${mapped.external_product_id}`, mapped)
+    }
+
+    existingByFallback.set(
+      toInventoryKey({
+        storeKey: mapped.store_key,
+        name: mapped.name,
+        brand: mapped.brand,
+        packageSize: Number(mapped.package_size),
+        packageUnit: mapped.package_unit,
+      }),
+      mapped,
+    )
+  })
+
+  const upserts: Array<Record<string, unknown>> = []
+  let unchanged = 0
+
+  args.products.forEach((product) => {
+    const externalKey = `${product.storeKey}:${product.externalProductId}`
+    const fallbackKey = toInventoryKey({
+      storeKey: product.storeKey,
+      name: product.name,
+      brand: product.brand,
+      packageSize: product.packageSize,
+      packageUnit: product.packageUnit,
+    })
+
+    const existing = existingByExternal.get(externalKey) ?? existingByFallback.get(fallbackKey)
+    if (existing?.source_hash && existing.source_hash === product.sourceHash) {
+      unchanged += 1
+      return
+    }
+
+    const ingredientId =
+      args.ingredientIdByExternalId[externalKey] ??
+      existing?.ingredient_id ??
+      null
+
+    upserts.push({
+      id: existing?.id ?? uuidv4(),
+      store_key: product.storeKey,
+      ingredient_id: ingredientId,
+      name: product.name,
+      brand: product.brand,
+      category: product.category,
+      package_size: product.packageSize,
+      package_unit: product.packageUnit,
+      calories: product.nutrition.calories,
+      protein: product.nutrition.protein,
+      carbs: product.nutrition.carbs,
+      fat: product.nutrition.fat,
+      estimated_price: product.estimatedPrice,
+      currency: product.currency,
+      availability: product.availability,
+      last_updated: product.updatedAt,
+      external_product_id: product.externalProductId,
+      source_hash: product.sourceHash,
+      updated_at: new Date().toISOString(),
+    })
+  })
+
+  if (upserts.length === 0) {
+    return { inserted: 0, updated: 0, unchanged }
+  }
+
+  const idsForInserted = new Set(
+    upserts
+      .filter((item) => {
+        const id = String(item.id)
+        return !existingRows?.some((row) => row.id === id)
+      })
+      .map((item) => String(item.id)),
+  )
+
+  const { error: upsertError } = await supabase
+    .from('store_inventory')
+    .upsert(upserts, { onConflict: 'id' })
+
+  if (upsertError) throw upsertError
+
+  return {
+    inserted: idsForInserted.size,
+    updated: upserts.length - idsForInserted.size,
+    unchanged,
+  }
 }
 
 export function createSupabaseStoreInventoryProvider(): StoreInventoryProvider {

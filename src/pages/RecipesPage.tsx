@@ -524,6 +524,9 @@ function RecipesWorkspace() {
     setGroceryError('')
 
     try {
+      const weekDates = new Set(getWeekDates(selectedWeekStart))
+      const weeklyRestaurantMeals = restaurantMeals.filter((meal) => weekDates.has(meal.mealDate))
+
       const result = await optimizeWeeklyGroceryPlan({
         goal: groceryGoal,
         recipes,
@@ -537,6 +540,34 @@ function RecipesWorkspace() {
             : allowedStoreKeys.length > 0
               ? allowedStoreKeys
               : undefined,
+        constraints: {
+          macroTargets: nutritionGoal
+            ? {
+                calories: nutritionGoal.calories * 7,
+                protein: nutritionGoal.protein * 7,
+                carbs: nutritionGoal.carbs * 7,
+                fat: nutritionGoal.fat * 7,
+              }
+            : undefined,
+          budget: profileDraft.budget > 0 ? profileDraft.budget : undefined,
+          pantryItems: pantryItems,
+          restaurantMeals: weeklyRestaurantMeals,
+          allergies: profileDraft.allergies,
+          dietaryRestrictions: [profileDraft.dietaryStyle],
+          mealFrequency: {
+            min: Math.min(entries.length, Math.max(1, Math.ceil(entries.length * 0.6))),
+            max: entries.length,
+          },
+          maxCookingMinutesPerRecipe: profileDraft.cookingTimeAvailable,
+          maxTotalCookingMinutes: Math.max(45, profileDraft.cookingTimeAvailable * 7),
+          preferredStores:
+            groceryGoal === 'single_store_only'
+              ? [singleStoreKey]
+              : allowedStoreKeys.length > 0
+                ? allowedStoreKeys
+                : undefined,
+          maxShoppingTrips: groceryGoal === 'single_store_only' ? 1 : Math.min(3, Math.max(1, allowedStoreKeys.length || 2)),
+        },
       })
       setGroceryResult(result)
       setAiResult(null)
