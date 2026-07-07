@@ -1,17 +1,48 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { resetPassword } from '../services/authService'
 import { Link } from 'react-router-dom'
 import Button from '../components/Button'
+
+const RESET_COOLDOWN_SECONDS = 60
+
+function isRateLimitedError(message: string) {
+  const normalizedMessage = message.toLowerCase()
+  return normalizedMessage.includes('429') || normalizedMessage.includes('rate limit') || normalizedMessage.includes('too many requests')
+}
 
 function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [cooldownRemaining, setCooldownRemaining] = useState(0)
+
+  useEffect(() => {
+    if (cooldownRemaining <= 0) {
+      return
+    }
+
+    const timeout = window.setTimeout(() => {
+      setCooldownRemaining((current) => Math.max(current - 1, 0))
+    }, 1000)
+
+    return () => {
+      window.clearTimeout(timeout)
+    }
+  }, [cooldownRemaining])
+
+  function startCooldown() {
+    setCooldownRemaining(RESET_COOLDOWN_SECONDS)
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+
+    if (cooldownRemaining > 0) {
+      return
+    }
+
     setError('')
     setMessage('')
     setLoading(true)
@@ -20,11 +51,18 @@ function ForgotPasswordPage() {
     setLoading(false)
 
     if (resetError) {
+      if (isRateLimitedError(resetError.message)) {
+        setError(`Too many reset attempts. Please wait ${RESET_COOLDOWN_SECONDS} seconds before trying again.`)
+        startCooldown()
+        return
+      }
+
       setError(resetError.message)
       return
     }
 
     setMessage('Check your email for password reset instructions.')
+    startCooldown()
   }
 
   return (
@@ -63,8 +101,8 @@ function ForgotPasswordPage() {
             </Link>
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Sending email…' : 'Send reset link'}
+          <Button type="submit" className="w-full" disabled={loading || cooldownRemaining > 0}>
+            {loading ? 'Sending email…' : cooldownRemaining > 0 ? `Try again in ${cooldownRemaining}s` : 'Send reset link'}
           </Button>
         </form>
       </motion.div>
