@@ -64,6 +64,25 @@ import type {
   UserOptimizationProfileInput,
 } from '../types'
 
+type RecipesWorkspaceSectionId =
+  | 'recipes-builder'
+  | 'planner'
+  | 'shopping'
+  | 'profile'
+  | 'pantry'
+  | 'ingredients'
+  | 'optimization'
+
+const recipesWorkspaceSections: Array<{ id: RecipesWorkspaceSectionId; label: string }> = [
+  { id: 'recipes-builder', label: 'Recipes' },
+  { id: 'planner', label: 'Planner' },
+  { id: 'shopping', label: 'Shopping' },
+  { id: 'profile', label: 'Profile' },
+  { id: 'pantry', label: 'Pantry' },
+  { id: 'ingredients', label: 'Ingredients' },
+  { id: 'optimization', label: 'Preview' },
+]
+
 const optimizationGoals: Array<{ value: OptimizationGoal; label: string }> = [
   { value: 'lowest_cost', label: 'Lowest Cost' },
   { value: 'healthiest', label: 'Healthiest' },
@@ -211,6 +230,7 @@ function toDraft(recipe?: Recipe): RecipeDraft {
 
 function RecipesWorkspace() {
   const { user } = useAuth()
+  const [activeSection, setActiveSection] = useState<RecipesWorkspaceSectionId>('recipes-builder')
 
   const {
     recipes,
@@ -278,6 +298,36 @@ function RecipesWorkspace() {
     return rankRecipesForGoal({ goal, recipes, limit: 3 })
   }, [goal, recipes])
 
+  const firstTimeChecklist = useMemo(
+    () => [
+      {
+        label: 'Add recipe base',
+        value: recipes.length,
+        done: recipes.length > 0,
+        helper: 'recipes saved',
+      },
+      {
+        label: 'Set pantry',
+        value: pantryItems.length,
+        done: pantryItems.length > 0,
+        helper: 'items tracked',
+      },
+      {
+        label: 'Plan week',
+        value: restaurantMeals.length,
+        done: restaurantMeals.length > 0,
+        helper: 'meals out logged',
+      },
+      {
+        label: 'Generate shopping',
+        value: groceryResult ? 1 : 0,
+        done: Boolean(groceryResult),
+        helper: groceryResult ? 'ready' : 'pending',
+      },
+    ],
+    [recipes.length, pantryItems.length, restaurantMeals.length, groceryResult],
+  )
+
   useEffect(() => {
     setSelectedRecipeIds(recipes.map((recipe) => recipe.id))
     setPlannedServingsByRecipeId(
@@ -287,6 +337,41 @@ function RecipesWorkspace() {
       }, {}),
     )
   }, [recipes])
+
+  useEffect(() => {
+    const observers: IntersectionObserver[] = []
+
+    recipesWorkspaceSections.forEach(({ id }) => {
+      const node = document.getElementById(id)
+      if (!node) return
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              setActiveSection(id)
+            }
+          })
+        },
+        { rootMargin: '-30% 0px -55% 0px', threshold: 0.01 },
+      )
+
+      observer.observe(node)
+      observers.push(observer)
+    })
+
+    return () => {
+      observers.forEach((observer) => observer.disconnect())
+    }
+  }, [])
+
+  function scrollToSection(sectionId: RecipesWorkspaceSectionId) {
+    const node = document.getElementById(sectionId)
+    if (!node) return
+
+    node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setActiveSection(sectionId)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -855,11 +940,40 @@ function RecipesWorkspace() {
         <p className="mt-3 max-w-3xl text-sm text-slate-600">
           Build optimization-ready recipes with ingredient-level nutrition and cost data. This subsystem is structured for future grocery pricing and multi-objective optimization.
         </p>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {firstTimeChecklist.map((item) => (
+            <div key={item.label} className={`rounded-2xl border px-4 py-3 ${item.done ? 'border-emerald-200 bg-emerald-50/70' : 'border-slate-200 bg-slate-50'}`}>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">{item.label}</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-950">{item.value}</p>
+              <p className="mt-1 text-xs text-slate-500">{item.helper}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="sticky top-20 z-30 rounded-2xl border border-slate-200/90 bg-white/95 p-3 shadow-sm backdrop-blur">
+        <div className="flex flex-wrap items-center gap-2">
+          {recipesWorkspaceSections.map((section) => {
+            const isActive = activeSection === section.id
+
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => scrollToSection(section.id)}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] transition ${isActive ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                {section.label}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
         <section className="space-y-6">
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div id="recipes-builder" className="scroll-mt-40 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-xl font-semibold text-slate-950">{activeRecipeId ? 'Edit recipe' : 'Create recipe'}</h2>
               {activeRecipeId ? (
@@ -1089,7 +1203,7 @@ function RecipesWorkspace() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div id="planner" className="scroll-mt-40 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold text-slate-950">Real world nutrition</h2>
@@ -1336,7 +1450,7 @@ function RecipesWorkspace() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div id="shopping" className="scroll-mt-40 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold text-slate-950">Grocery optimization engine</h2>
@@ -1590,7 +1704,7 @@ function RecipesWorkspace() {
         </section>
 
         <aside className="space-y-6">
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div id="profile" className="scroll-mt-40 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-950">User optimization profile</h2>
             <p className="mt-2 text-sm text-slate-500">Personalize recommendations for budget, goals, diet, and convenience.</p>
 
@@ -1754,7 +1868,7 @@ function RecipesWorkspace() {
             </form>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div id="pantry" className="scroll-mt-40 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-950">Pantry inventory</h2>
             <p className="mt-2 text-sm text-slate-500">Track ingredients at home to reduce shopping and food waste.</p>
 
@@ -1862,7 +1976,7 @@ function RecipesWorkspace() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div id="ingredients" className="scroll-mt-40 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-950">Ingredient catalog</h2>
             <p className="mt-2 text-sm text-slate-500">Reusable ingredients for nutrition, grocery, and optimization engines.</p>
 
@@ -2037,7 +2151,7 @@ function RecipesWorkspace() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div id="optimization" className="scroll-mt-40 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-950">Optimization preview</h2>
             <p className="mt-2 text-sm text-slate-500">Preview ranking architecture for multi-objective recipe optimization.</p>
 
