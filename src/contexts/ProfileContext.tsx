@@ -15,10 +15,15 @@ export const ProfileContext = createContext<ProfileContextValue | undefined>(und
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
-    if (!user) return
+    if (!user) {
+      setProfile(null)
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     try {
       const data = await getProfile(user.id)
