@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import ProfilePage from './pages/ProfilePage'
 import SettingsPage from './pages/SettingsPage'
+import RecipesPage from './pages/RecipesPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/recipes" element={<RecipesPage />} />
             </Route>
 
             <Route path="*" element={<NotFoundPage />} />

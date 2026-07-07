@@ -19,7 +19,7 @@ function NavItem({ to, children }: { to: string; children: string }) {
 
 export default function Navbar() {
 	const location = useLocation()
-	const isDashboardArea = location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/settings')
+	const isDashboardArea = location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/settings') || location.pathname.startsWith('/recipes')
 
 	return (
 		<header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur">
@@ -32,6 +32,7 @@ export default function Navbar() {
 					<nav className="order-3 flex w-full items-center gap-2 overflow-x-auto pb-1 sm:order-none sm:w-auto sm:pb-0">
 						<NavItem to="/dashboard">Dashboard</NavItem>
 						<NavItem to="/profile">Profile</NavItem>
+						<NavItem to="/recipes">Recipes</NavItem>
 						<NavItem to="/settings">Settings</NavItem>
 					</nav>
 				) : (
