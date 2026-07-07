@@ -189,26 +189,80 @@ export async function createRecipeForUser(userId: string, draft: RecipeDraft): P
 }
 
 export async function updateRecipeById(userId: string, recipeId: string, draft: RecipeDraft): Promise<Recipe> {
+  const { data: existingRecipeData, error: existingRecipeError } = await supabase
+    .from('recipes')
+    .select('*')
+    .eq('id', recipeId)
+    .eq('user_id', userId)
+    .single()
+
+  if (existingRecipeError) throw existingRecipeError
+
+  const { data: existingIngredientData, error: existingIngredientError } = await supabase
+    .from('recipe_ingredients')
+    .select('*')
+    .eq('recipe_id', recipeId)
+
+  if (existingIngredientError) throw existingIngredientError
+
+  const existingRecipe = existingRecipeData as RecipeRow
+  const existingIngredients = (existingIngredientData ?? []) as Array<Record<string, unknown>>
+
   const rowPayload = {
     ...toRecipeRowPayload(userId, draft),
     updated_at: new Date().toISOString(),
   }
 
-  const { error: updateError } = await supabase
-    .from('recipes')
-    .update(rowPayload)
-    .eq('id', recipeId)
-    .eq('user_id', userId)
+  let recipeRowUpdated = false
 
-  if (updateError) throw updateError
+  try {
+    const { error: updateError } = await supabase
+      .from('recipes')
+      .update(rowPayload)
+      .eq('id', recipeId)
+      .eq('user_id', userId)
 
-  const { error: deleteIngredientsError } = await supabase.from('recipe_ingredients').delete().eq('recipe_id', recipeId)
-  if (deleteIngredientsError) throw deleteIngredientsError
+    if (updateError) throw updateError
+    recipeRowUpdated = true
 
-  const ingredientPayloads = draft.ingredients.map((ingredient) => toRecipeIngredientPayload(recipeId, ingredient))
-  if (ingredientPayloads.length > 0) {
-    const { error: insertIngredientsError } = await supabase.from('recipe_ingredients').insert(ingredientPayloads)
-    if (insertIngredientsError) throw insertIngredientsError
+    const { error: deleteIngredientsError } = await supabase.from('recipe_ingredients').delete().eq('recipe_id', recipeId)
+    if (deleteIngredientsError) throw deleteIngredientsError
+
+    const ingredientPayloads = draft.ingredients.map((ingredient) => toRecipeIngredientPayload(recipeId, ingredient))
+    if (ingredientPayloads.length > 0) {
+      const { error: insertIngredientsError } = await supabase.from('recipe_ingredients').insert(ingredientPayloads)
+      if (insertIngredientsError) throw insertIngredientsError
+    }
+  } catch (updateFlowError) {
+    if (recipeRowUpdated) {
+      await supabase
+        .from('recipes')
+        .update({
+          user_id: existingRecipe.user_id,
+          title: existingRecipe.title,
+          description: existingRecipe.description,
+          servings: existingRecipe.servings,
+          cooking_time_minutes: existingRecipe.cooking_time_minutes,
+          instructions: existingRecipe.instructions,
+          estimated_cost: existingRecipe.estimated_cost,
+          is_favorite: existingRecipe.is_favorite,
+          total_calories: existingRecipe.total_calories,
+          total_protein: existingRecipe.total_protein,
+          total_carbs: existingRecipe.total_carbs,
+          total_fat: existingRecipe.total_fat,
+          updated_at: existingRecipe.updated_at,
+        })
+        .eq('id', recipeId)
+        .eq('user_id', userId)
+
+      await supabase.from('recipe_ingredients').delete().eq('recipe_id', recipeId)
+
+      if (existingIngredients.length > 0) {
+        await supabase.from('recipe_ingredients').insert(existingIngredients)
+      }
+    }
+
+    throw updateFlowError
   }
 
   const { data, error } = await supabase.from('recipes').select('*, recipe_ingredients(*)').eq('id', recipeId).single()
